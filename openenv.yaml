@@ -1,0 +1,97 @@
+name: db-migration-env
+version: "1.0.0"
+description: >
+  A stateful RL environment for training agents to safely execute database
+  schema migrations. The agent interacts with a live in-memory SQLite database
+  — every action changes the schema state, errors propagate forward, and the
+  agent must observe, diagnose, and recover. Three tasks of increasing difficulty:
+  safe column addition (easy), FK-dependent column rename (medium), and
+  partial-migration rollback recovery (hard).
+
+author: "db-migration-env"
+license: MIT
+
+environment:
+  type: http
+  port: 7860
+  endpoints:
+    reset: /reset
+    step:  /step
+    state: /state
+
+tasks:
+  - id: task1_add_column
+    description: "Add a nullable column to a table without breaking FK relationships"
+    difficulty: easy
+    max_steps: 15
+    score_range: [0.0, 1.0]
+
+  - id: task2_rename_column
+    description: "Rename a column that is referenced by foreign keys in two other tables"
+    difficulty: medium
+    max_steps: 20
+    score_range: [0.0, 1.0]
+
+  - id: task3_rollback_recovery
+    description: "Diagnose and recover from a partially executed migration in broken intermediate state"
+    difficulty: hard
+    max_steps: 25
+    score_range: [0.0, 1.0]
+
+actions:
+  - name: analyse_schema
+    description: "Inspect current tables, columns, types and constraints"
+    parameters: {}
+
+  - name: find_dependencies
+    description: "Find all foreign keys referencing a specific column"
+    parameters:
+      column:
+        type: string
+        description: "Format: table.column e.g. users.user_id"
+
+  - name: write_migration
+    description: "Write a SQL migration statement (does not execute)"
+    parameters:
+      sql:
+        type: string
+        description: "SQL DDL statement"
+
+  - name: dry_run
+    description: "Preview a SQL statement against a savepoint, then rollback"
+    parameters:
+      sql:
+        type: string
+
+  - name: execute
+    description: "Execute a SQL statement against the live database"
+    parameters:
+      sql:
+        type: string
+
+  - name: rollback
+    description: "Attempt to undo the last executed statement"
+    parameters: {}
+
+  - name: validate
+    description: "Check schema consistency and get current score estimate"
+    parameters: {}
+
+  - name: observe_result
+    description: "Re-read and return the current schema state"
+    parameters: {}
+
+grader:
+  type: deterministic
+  method: schema_comparison
+  description: >
+    Compares final SQLite schema dict against ground truth target using
+    Python dict comparison. No LLM judge required. Fully reproducible.
+
+docker:
+  dockerfile: server/Dockerfile
+  context: .
+
+hardware:
+  cpu: 2
+  memory_gb: 8
